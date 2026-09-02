@@ -73,3 +73,103 @@ export const generateEmail = createServerFn({ method: "POST" })
     if (!text) throw new Error("The AI returned an empty response. Please try again.");
     return { email: text };
   });
+
+export const summarizeMeeting = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => MeetingInput.parse(input))
+  .handler(async ({ data }) => {
+    const apiKey = process.env["LOVABLE_API_KEY"];
+    if (!apiKey) throw new Error("AI is not configured for this app.");
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Lovable-API-Key": apiKey,
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-5.6-sol",
+        reasoning: { effort: "low" },
+        input: [
+          {
+            role: "system",
+            content:
+              "You summarize workplace meeting notes. Return only JSON matching the requested schema. Use empty arrays for sections the notes do not mention.",
+          },
+          {
+            role: "user",
+            content: `Summarize these meeting notes into: 1) Key Decisions, 2) Action Items (with owner if mentioned), 3) Deadlines mentioned. Format as clear bullet points under each heading.\n\nMeeting notes:\n${data.notes}`,
+          },
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "meeting_summary",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              required: ["decisions", "actionItems", "deadlines"],
+              properties: {
+                decisions: {
+                  type: "array",
+                  items: { type: "string" },
+                },
+                actionItems: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["task", "owner"],
+                    properties: {
+                      task: { type: "string" },
+                      owner: { type: ["string", "null"] },
+                    },
+                  },
+                },
+                deadlines: {
+                  type: "array",
+                  items: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      let message = body;
+      try {
+        message = (JSON.parse(body) as { error?: { message?: string } }).error?.message ?? body;
+      } catch {
+        // keep raw body
+      }
+      if (res.status === 429) {
+        throw new Error("Too many requests right now. Please wait a moment and try again.");
+      }
+      if (res.status === 402) {
+        throw new Error(message || "AI credits are exhausted. Please add credits to continue.");
+      }
+      throw new Error(message || `AI request failed (${res.status}).`);
+    }
+
+    const json = (await res.json()) as { output_text?: string };
+    const raw = json.output_text ?? "";
+    let parsed: {
+      decisions: string[];
+      actionItems: { task: string; owner: string | null }[];
+      deadlines: string[];
+    };
+    try {
+      parsed = JSON.parse(raw) as typeof parsed;
+    } catch {
+      throw new Error("The AI returned an unexpected format. Please try again.");
+    }
+
+    return {
+      decisions: parsed.decisions ?? [],
+      actionItems: parsed.actionItems ?? [],
+      deadlines: parsed.deadlines ?? [],
+    };
+  });
