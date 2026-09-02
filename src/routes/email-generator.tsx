@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { Mail, Sparkles, Copy } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
+import { generateEmail } from "@/lib/ai.functions";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -22,37 +23,51 @@ export const Route = createFileRoute("/email-generator")({
       { title: "Email Generator — Assistly AI" },
       {
         name: "description",
-        content: "Generate professional workplace emails in seconds with tone and length control.",
+        content: "Generate professional workplace emails in seconds with AI tone control.",
       },
       { property: "og:title", content: "Email Generator — Assistly AI" },
       {
         property: "og:description",
-        content: "Draft polished emails with AI: pick a tone, add context, send with confidence.",
+        content: "Draft polished emails with AI: add key points, pick a tone, copy and send.",
       },
     ],
   }),
   component: EmailGenerator,
 });
 
+type Tone = "Formal" | "Friendly" | "Persuasive";
+
 function EmailGenerator() {
-  const [recipient, setRecipient] = useState("");
-  const [topic, setTopic] = useState("");
-  const [tone, setTone] = useState("professional");
+  const runGenerate = useServerFn(generateEmail);
+  const [keyPoints, setKeyPoints] = useState("");
+  const [tone, setTone] = useState<Tone>("Formal");
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const generate = () => {
-    if (!topic.trim()) {
-      toast.error("Add what the email should be about.");
+  const onGenerate = async () => {
+    if (!keyPoints.trim()) {
+      toast.error("Add the key points the email should cover.");
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setDraft(
-        `Subject: ${topic.trim()}\n\nHi ${recipient.trim() || "there"},\n\nI hope you're doing well. I wanted to reach out regarding ${topic.trim().toLowerCase()}.\n\nHere's a quick summary of where things stand and what I'd suggest as next steps. I've kept it brief so it's easy to action, and I'm happy to jump on a short call if that's easier.\n\nCould you let me know your thoughts by end of week?\n\nBest regards,\nOratilwe\n\n— written in a ${tone} tone`,
-      );
+    try {
+      const result = await runGenerate({ data: { keyPoints: keyPoints.trim(), tone } });
+      setDraft(result.email);
+      toast.success("Email generated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not generate the email.");
+    } finally {
       setLoading(false);
-    }, 700);
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(draft);
+      toast.success("Copied to clipboard");
+    } catch {
+      toast.error("Copying isn't available in this browser.");
+    }
   };
 
   return (
@@ -60,75 +75,59 @@ function EmailGenerator() {
       <PageHeader
         icon={Mail}
         title="Email Generator"
-        description="Turn a few notes into a ready-to-send email."
+        description="Turn a few key points into a ready-to-send email."
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <div className="surface-card space-y-4 p-5">
           <div className="space-y-2">
-            <Label htmlFor="recipient">Recipient</Label>
-            <Input
-              id="recipient"
-              placeholder="e.g. Sarah from Finance"
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="topic">What is it about?</Label>
+            <Label htmlFor="key-points">What the email should say</Label>
             <Textarea
-              id="topic"
-              rows={5}
-              placeholder="Follow up on the Q3 budget review and request updated figures"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
+              id="key-points"
+              rows={8}
+              placeholder="e.g. Follow up on the Q3 budget review, ask for updated figures by Friday, offer a 15-minute call"
+              value={keyPoints}
+              onChange={(e) => setKeyPoints(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              List the key points — the AI handles the structure and wording.
+            </p>
           </div>
+
           <div className="space-y-2">
-            <Label>Tone</Label>
-            <Select value={tone} onValueChange={setTone}>
-              <SelectTrigger>
+            <Label htmlFor="tone">Tone</Label>
+            <Select value={tone} onValueChange={(v) => setTone(v as Tone)}>
+              <SelectTrigger id="tone">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {["professional", "friendly", "concise", "persuasive", "apologetic"].map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
-                  </SelectItem>
-                ))}
+                <SelectItem value="Formal">Formal</SelectItem>
+                <SelectItem value="Friendly">Friendly</SelectItem>
+                <SelectItem value="Persuasive">Persuasive</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={generate} disabled={loading} className="w-full">
+
+          <Button onClick={onGenerate} disabled={loading} className="w-full">
             <Sparkles className="size-4" />
-            {loading ? "Generating…" : "Generate email"}
+            {loading ? "Generating…" : "Generate Email"}
           </Button>
         </div>
 
         <div className="surface-card flex min-h-72 flex-col p-5">
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-            <h2 className="truncate text-base font-semibold">Draft</h2>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!draft}
-              onClick={() => {
-                navigator.clipboard.writeText(draft);
-                toast.success("Draft copied to clipboard");
-              }}
-            >
-              <Copy className="size-4" /> Copy
+            <h2 className="truncate text-base font-semibold">Generated email</h2>
+            <Button variant="outline" size="sm" disabled={!draft} onClick={copy}>
+              <Copy className="size-4" /> Copy to Clipboard
             </Button>
           </div>
-          <div className="mt-4 flex-1 rounded-xl bg-muted/60 p-4">
-            {draft ? (
-              <pre className="font-sans text-sm whitespace-pre-wrap">{draft}</pre>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Your generated email will appear here.
-              </p>
-            )}
-          </div>
+          <Textarea
+            aria-label="Generated email"
+            className="mt-4 min-h-64 flex-1 font-sans text-sm"
+            placeholder="Your generated email will appear here — you can edit it before sending."
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
         </div>
       </div>
     </div>
