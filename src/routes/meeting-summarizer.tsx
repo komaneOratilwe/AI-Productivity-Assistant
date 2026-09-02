@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NotebookPen, Sparkles, CheckCircle2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { NotebookPen, Sparkles, CheckCircle2, CalendarClock, ListChecks, Gavel } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
+import { summarizeMeeting } from "@/lib/ai.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -14,46 +16,49 @@ export const Route = createFileRoute("/meeting-summarizer")({
       { title: "Meeting Summarizer — Assistly AI" },
       {
         name: "description",
-        content: "Paste a transcript and get key decisions, action items and owners in seconds.",
+        content: "Paste a transcript and get key decisions, action items and deadlines in seconds.",
       },
       { property: "og:title", content: "Meeting Summarizer — Assistly AI" },
       {
         property: "og:description",
-        content: "Turn long meeting transcripts into a clear summary with owners and next steps.",
+        content: "Turn long meeting notes into key decisions, action items and deadlines.",
       },
     ],
   }),
   component: MeetingSummarizer,
 });
 
-type Summary = { points: string[]; actions: { task: string; owner: string }[] };
+type Summary = {
+  decisions: string[];
+  actionItems: { task: string; owner: string | null }[];
+  deadlines: string[];
+};
+
+function EmptyHint({ children }: { children: string }) {
+  return <p className="text-sm text-muted-foreground">{children}</p>;
+}
 
 function MeetingSummarizer() {
-  const [transcript, setTranscript] = useState("");
+  const runSummarize = useServerFn(summarizeMeeting);
+  const [notes, setNotes] = useState("");
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const run = () => {
-    if (transcript.trim().length < 20) {
-      toast.error("Paste a longer transcript to summarize.");
+  const run = async () => {
+    if (notes.trim().length < 20) {
+      toast.error("Paste longer meeting notes to summarize.");
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setSummary({
-        points: [
-          "Team aligned on shipping the new onboarding flow before month end.",
-          "Budget for paid acquisition is held flat until Q4 review.",
-          "Support backlog is the top blocker for the customer NPS goal.",
-        ],
-        actions: [
-          { task: "Finalize onboarding copy and hand off to design", owner: "Sarah" },
-          { task: "Draft Q4 acquisition proposal with two scenarios", owner: "Miguel" },
-          { task: "Set up weekly support backlog triage", owner: "Oratilwe" },
-        ],
-      });
+    try {
+      const result = await runSummarize({ data: { notes: notes.trim() } });
+      setSummary(result);
+      toast.success("Summary ready");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not summarize the notes.");
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   return (
@@ -61,57 +66,98 @@ function MeetingSummarizer() {
       <PageHeader
         icon={NotebookPen}
         title="Meeting Summarizer"
-        description="Decisions, action items and owners from any transcript."
+        description="Decisions, action items and deadlines from any transcript."
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="surface-card space-y-4 p-5">
-          <h2 className="text-base font-semibold">Transcript</h2>
+          <h2 className="text-base font-semibold">Meeting notes</h2>
           <Textarea
             rows={14}
-            placeholder="Paste your meeting transcript or notes here…"
-            value={transcript}
-            onChange={(e) => setTranscript(e.target.value)}
+            aria-label="Raw meeting notes"
+            placeholder="Paste your raw meeting transcript or notes here…"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
           />
           <Button onClick={run} disabled={loading} className="w-full">
             <Sparkles className="size-4" />
-            {loading ? "Summarizing…" : "Summarize meeting"}
+            {loading ? "Summarizing…" : "Summarize"}
           </Button>
         </div>
 
         <div className="surface-card space-y-5 p-5">
           <h2 className="text-base font-semibold">Summary</h2>
-          {summary ? (
-            <>
-              <ul className="space-y-2">
-                {summary.points.map((p) => (
-                  <li key={p} className="flex gap-2 text-sm">
-                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
-                    <span>{p}</span>
-                  </li>
-                ))}
-              </ul>
-              <div>
-                <p className="text-sm font-semibold">Action items</p>
-                <ul className="mt-2 space-y-2">
-                  {summary.actions.map((a) => (
-                    <li
-                      key={a.task}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl bg-muted/60 p-3"
-                    >
-                      <span className="min-w-0 text-sm">{a.task}</span>
-                      <Badge variant="secondary" className="shrink-0">
-                        {a.owner}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </>
+          {!summary ? (
+            <EmptyHint>
+              Your summary will appear here, split into key decisions, action items and deadlines.
+            </EmptyHint>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Your summary and action items will appear here.
-            </p>
+            <div className="space-y-5">
+              <section aria-label="Key decisions">
+                <div className="flex items-center gap-2">
+                  <Gavel className="size-4 text-primary" />
+                  <h3 className="text-sm font-semibold">Key Decisions</h3>
+                </div>
+                {summary.decisions.length > 0 ? (
+                  <ul className="mt-2 space-y-2">
+                    {summary.decisions.map((d, i) => (
+                      <li key={`${i}-${d}`} className="flex gap-2 text-sm">
+                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
+                        <span>{d}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <EmptyHint>No key decisions were mentioned in these notes.</EmptyHint>
+                )}
+              </section>
+
+              <section aria-label="Action items">
+                <div className="flex items-center gap-2">
+                  <ListChecks className="size-4 text-primary" />
+                  <h3 className="text-sm font-semibold">Action Items</h3>
+                </div>
+                {summary.actionItems.length > 0 ? (
+                  <ul className="mt-2 space-y-2">
+                    {summary.actionItems.map((a, i) => (
+                      <li
+                        key={`${i}-${a.task}`}
+                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl bg-muted/60 p-3"
+                      >
+                        <span className="min-w-0 text-sm">{a.task}</span>
+                        <Badge variant="secondary" className="shrink-0">
+                          {a.owner ?? "Unassigned"}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <EmptyHint>No action items were captured from these notes.</EmptyHint>
+                )}
+              </section>
+
+              <section aria-label="Deadlines mentioned">
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="size-4 text-primary" />
+                  <h3 className="text-sm font-semibold">Deadlines Mentioned</h3>
+                </div>
+                {summary.deadlines.length > 0 ? (
+                  <ul className="mt-2 space-y-2">
+                    {summary.deadlines.map((d, i) => (
+                      <li
+                        key={`${i}-${d}`}
+                        className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 text-sm"
+                      >
+                        <CalendarClock className="size-4 shrink-0 text-primary" />
+                        <span>{d}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <EmptyHint>No deadlines were mentioned in these notes.</EmptyHint>
+                )}
+              </section>
+            </div>
           )}
         </div>
       </div>
