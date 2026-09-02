@@ -93,7 +93,7 @@ function EmailGenerator() {
               <SelectContent>
                 {["professional", "friendly", "concise", "persuasive", "apologetic"].map((t) => (
                   <SelectItem key={t} value={t}>
-                    {t[0].toUpperCase() + t.slice(1)}
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
                   </SelectItem>
                 ))}
               </SelectContent>
