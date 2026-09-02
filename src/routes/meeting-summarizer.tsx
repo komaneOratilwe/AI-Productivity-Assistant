@@ -103,10 +103,7 @@ function MeetingSummarizer() {
           ) : (
             <div className="space-y-5">
               <section aria-label="Key decisions">
-                <div className="flex items-center gap-2">
-                  <Gavel className="size-4 text-primary" />
-                  <h3 className="text-sm font-semibold">Key Decisions</h3>
-                </div>
+                <SectionHeading icon={Gavel}>Key Decisions</SectionHeading>
                 {summary.decisions.length > 0 ? (
                   <ul className="mt-2 space-y-2">
                     {summary.decisions.map((d, i) => (
