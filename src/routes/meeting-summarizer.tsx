@@ -34,6 +34,15 @@ type Summary = {
   deadlines: string[];
 };
 
+function SectionHeading({ icon: Icon, children }: { icon: typeof Gavel; children: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Icon className="size-4 text-primary" />
+      <h3 className="text-sm font-semibold tracking-normal">{children}</h3>
+    </div>
+  );
+}
+
 function EmptyHint({ children }: { children: string }) {
   return <p className="text-sm text-muted-foreground">{children}</p>;
 }
