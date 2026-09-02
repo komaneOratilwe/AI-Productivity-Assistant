@@ -6,6 +6,10 @@ const EmailInput = z.object({
   tone: z.enum(["Formal", "Friendly", "Persuasive"]),
 });
 
+const MeetingInput = z.object({
+  notes: z.string().min(1),
+});
+
 type GatewayContent = { type?: string; text?: string };
 type GatewayOutput = { type?: string; content?: GatewayContent[] };
 
