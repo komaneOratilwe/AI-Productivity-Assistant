@@ -119,10 +119,7 @@ function MeetingSummarizer() {
               </section>
 
               <section aria-label="Action items">
-                <div className="flex items-center gap-2">
-                  <ListChecks className="size-4 text-primary" />
-                  <h3 className="text-sm font-semibold">Action Items</h3>
-                </div>
+                <SectionHeading icon={ListChecks}>Action Items</SectionHeading>
                 {summary.actionItems.length > 0 ? (
                   <ul className="mt-2 space-y-2">
                     {summary.actionItems.map((a, i) => (
