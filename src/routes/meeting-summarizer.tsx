@@ -140,10 +140,7 @@ function MeetingSummarizer() {
               </section>
 
               <section aria-label="Deadlines mentioned">
-                <div className="flex items-center gap-2">
-                  <CalendarClock className="size-4 text-primary" />
-                  <h3 className="text-sm font-semibold">Deadlines Mentioned</h3>
-                </div>
+                <SectionHeading icon={CalendarClock}>Deadlines Mentioned</SectionHeading>
                 {summary.deadlines.length > 0 ? (
                   <ul className="mt-2 space-y-2">
                     {summary.deadlines.map((d, i) => (
