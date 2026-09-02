@@ -154,8 +154,19 @@ export const summarizeMeeting = createServerFn({ method: "POST" })
       throw new Error(message || `AI request failed (${res.status}).`);
     }
 
-    const json = (await res.json()) as { output_text?: string };
-    const raw = json.output_text ?? "";
+    const json = (await res.json()) as {
+      output_text?: string;
+      output?: GatewayOutput[];
+    };
+    const raw =
+      json.output_text ??
+      (json.output ?? [])
+        .filter((o) => o.type === "message")
+        .flatMap((o) => o.content ?? [])
+        .filter((c) => c.type === "output_text" || typeof c.text === "string")
+        .map((c) => c.text ?? "")
+        .join("\n")
+        .trim();
     let parsed: {
       decisions: string[];
       actionItems: { task: string; owner: string | null }[];
