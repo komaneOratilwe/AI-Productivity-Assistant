@@ -130,6 +130,8 @@ function EmailGenerator() {
           />
         </div>
       </div>
+
+      <AiDisclaimer />
     </div>
   );
 }

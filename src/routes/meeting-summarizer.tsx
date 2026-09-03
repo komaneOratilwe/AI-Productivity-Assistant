@@ -161,6 +161,8 @@ function MeetingSummarizer() {
           )}
         </div>
       </div>
+
+      <AiDisclaimer />
     </div>
   );
 }
