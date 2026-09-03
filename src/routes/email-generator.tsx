@@ -4,6 +4,7 @@ import { Mail, Sparkles, Copy } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { PageHeader } from "@/components/page-header";
 import { generateEmail } from "@/lib/ai.functions";
 import { Button } from "@/components/ui/button";
@@ -130,6 +131,8 @@ function EmailGenerator() {
           />
         </div>
       </div>
+
+      <AiDisclaimer />
     </div>
   );
 }

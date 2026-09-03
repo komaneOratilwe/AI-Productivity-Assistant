@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ListChecks, Plus, Trash2 } from "lucide-react";
+import { CalendarClock, Sparkles } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
+import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -14,126 +15,136 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { planTasks } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/task-planner")({
   head: () => ({
     meta: [
-      { title: "Task Planner — Assistly AI" },
+      { title: "AI Task Planner — Assistly AI" },
       {
         name: "description",
-        content: "Plan your week with prioritized, AI-assisted tasks you can check off.",
+        content: "Turn a task list into a prioritized schedule with AI-suggested time blocks.",
       },
-      { property: "og:title", content: "Task Planner — Assistly AI" },
+      { property: "og:title", content: "AI Task Planner — Assistly AI" },
       {
         property: "og:description",
-        content: "Break goals into prioritized tasks and track progress in one clean board.",
+        content: "Prioritize tasks by urgency and importance with a realistic AI-generated schedule.",
       },
     ],
   }),
   component: TaskPlanner,
 });
 
-type Priority = "high" | "medium" | "low";
-type Task = { id: number; title: string; priority: Priority; done: boolean };
+type Block = {
+  timeBlock: string;
+  task: string;
+  priority: "High" | "Medium" | "Low";
+  rationale: string;
+};
 
-const seed: Task[] = [
-  { id: 1, title: "Finalize onboarding copy", priority: "high", done: false },
-  { id: 2, title: "Review Q3 budget figures", priority: "medium", done: false },
-  { id: 3, title: "Send follow-up to Northwind Group", priority: "high", done: true },
-  { id: 4, title: "Prep research brief on pricing", priority: "low", done: false },
-];
-
-const tone: Record<Priority, string> = {
-  high: "bg-destructive/10 text-destructive",
-  medium: "bg-primary-soft text-accent-foreground",
-  low: "bg-muted text-muted-foreground",
+const priorityTone: Record<string, string> = {
+  High: "bg-destructive/10 text-destructive",
+  Medium: "bg-primary-soft text-accent-foreground",
+  Low: "bg-muted text-muted-foreground",
 };
 
 function TaskPlanner() {
-  const [tasks, setTasks] = useState<Task[]>(seed);
-  const [title, setTitle] = useState("");
-  const [priority, setPriority] = useState<Priority>("medium");
+  const [tasks, setTasks] = useState("");
+  const [horizon, setHorizon] = useState<"Today" | "This Week">("Today");
+  const [overview, setOverview] = useState("");
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const add = () => {
-    if (!title.trim()) return;
-    setTasks((t) => [{ id: Date.now(), title: title.trim(), priority, done: false }, ...t]);
-    setTitle("");
+  const generate = async () => {
+    if (!tasks.trim()) {
+      toast.error("List at least one task first.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await planTasks({ data: { tasks: tasks.trim(), horizon } });
+      setOverview(result.overview);
+      setBlocks(result.blocks);
+      toast.success("Schedule generated.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
-
-  const done = tasks.filter((t) => t.done).length;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={ListChecks}
-        title="Task Planner"
-        description="Prioritize the week and keep momentum."
-        action={
-          <Badge variant="secondary" className="shrink-0">
-            {done}/{tasks.length} done
-          </Badge>
-        }
+        icon={CalendarClock}
+        title="AI Task Planner"
+        description="Turn a list of tasks into a prioritized, realistic schedule."
       />
 
-      <div className="surface-card grid gap-3 p-5 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-        <Input
-          placeholder="Add a task…"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
-        />
-        <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
-          <SelectTrigger className="sm:w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button onClick={add}>
-          <Plus className="size-4" /> Add task
-        </Button>
+      <div className="surface-card space-y-4 p-5">
+        <div className="space-y-2">
+          <Label htmlFor="tasks">Your tasks (one per line)</Label>
+          <Textarea
+            id="tasks"
+            placeholder={"Finalize onboarding copy\nReview Q3 budget figures\nSend follow-up to Northwind Group"}
+            value={tasks}
+            onChange={(e) => setTasks(e.target.value)}
+            className="min-h-36"
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <div className="space-y-2 sm:max-w-56">
+            <Label>Plan for</Label>
+            <Select value={horizon} onValueChange={(v) => setHorizon(v as "Today" | "This Week")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Today">Today</SelectItem>
+                <SelectItem value="This Week">This Week</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={generate} disabled={loading}>
+            <Sparkles className="size-4" />
+            {loading ? "Generating…" : "Generate Schedule"}
+          </Button>
+        </div>
       </div>
 
-      <ul className="space-y-3">
-        {tasks.map((t) => (
-          <li
-            key={t.id}
-            className="surface-card grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-4"
-          >
-            <Checkbox
-              checked={t.done}
-              onCheckedChange={() =>
-                setTasks((list) =>
-                  list.map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)),
-                )
-              }
-            />
-            <span
-              className={`min-w-0 truncate text-sm ${t.done ? "text-muted-foreground line-through" : ""}`}
-            >
-              {t.title}
-            </span>
-            <div className="flex shrink-0 items-center gap-2">
-              <span
-                className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${tone[t.priority]}`}
-              >
-                {t.priority}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setTasks((list) => list.filter((x) => x.id !== t.id))}
-                aria-label={`Delete ${t.title}`}
-              >
-                <Trash2 className="size-4" />
-              </Button>
+      {blocks.length > 0 && (
+        <div className="space-y-4">
+          {overview && (
+            <div className="surface-card p-5">
+              <h2 className="text-base font-semibold">Overview</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{overview}</p>
             </div>
-          </li>
-        ))}
-      </ul>
+          )}
+          <ol className="space-y-3">
+            {blocks.map((b, i) => (
+              <li key={`${b.timeBlock}-${i}`} className="surface-card grid gap-3 p-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
+                <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+                  <CalendarClock className="size-4 shrink-0" />
+                  <span>{b.timeBlock}</span>
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium">{b.task}</span>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${priorityTone[b.priority] ?? "bg-muted text-muted-foreground"}`}
+                    >
+                      {b.priority}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">{b.rationale}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      <AiDisclaimer />
     </div>
   );
 }
