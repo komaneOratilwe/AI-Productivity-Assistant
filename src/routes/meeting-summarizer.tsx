@@ -4,6 +4,7 @@ import { NotebookPen, Sparkles, CheckCircle2, CalendarClock, ListChecks, Gavel }
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { PageHeader } from "@/components/page-header";
 import { summarizeMeeting } from "@/lib/ai.functions";
 import { Button } from "@/components/ui/button";
