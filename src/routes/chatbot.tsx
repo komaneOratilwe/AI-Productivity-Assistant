@@ -1,10 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Bot, Send, User } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 
+import { AiDisclaimer } from "@/components/ai-disclaimer";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { chatReply } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/chatbot")({
   head: () => ({
@@ -26,31 +30,45 @@ export const Route = createFileRoute("/chatbot")({
 
 type Msg = { id: number; role: "user" | "assistant"; text: string };
 
-function Chatbot() {
-  const [messages, setMessages] = useState<Msg[]>([
-    {
-      id: 1,
-      role: "assistant",
-      text: "Hi! I can help you draft messages, plan work, or think through a problem. What are you working on?",
-    },
-  ]);
-  const [input, setInput] = useState("");
+const opening: Msg = {
+  id: 1,
+  role: "assistant",
+  text: "Hi! I can help you draft messages, plan work, or think through a problem. What are you working on?",
+};
 
-  const send = () => {
+function Chatbot() {
+  const [messages, setMessages] = useState<Msg[]>([opening]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [messages, loading]);
+
+  const send = async () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text || loading) return;
     setInput("");
-    setMessages((m) => [...m, { id: Date.now(), role: "user", text }]);
-    setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          text: `Here's how I'd approach "${text}": start by clarifying the outcome you need, then break it into two or three concrete steps you can finish today. Want me to turn that into tasks or a draft message?`,
+    const next: Msg[] = [...messages, { id: Date.now(), role: "user", text }];
+    setMessages(next);
+    setLoading(true);
+    try {
+      const { reply } = await chatReply({
+        data: {
+          messages: next
+            .filter((m) => m.id !== opening.id)
+            .map((m) => ({ role: m.role, text: m.text })),
         },
-      ]);
-    }, 600);
+      });
+      setMessages((m) => [...m, { id: Date.now() + 1, role: "assistant", text: reply }]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+      inputRef.current?.focus();
+    }
   };
 
   return (
@@ -62,7 +80,7 @@ function Chatbot() {
       />
 
       <div className="surface-card flex h-[60vh] min-h-96 flex-col">
-        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+        <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-5">
           {messages.map((m) => (
             <div
               key={m.id}
@@ -79,26 +97,51 @@ function Chatbot() {
               </div>
               <div
                 className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
-                  m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
+                  m.role === "user"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-foreground"
                 }`}
               >
-                {m.text}
+                {m.role === "assistant" ? (
+                  <div className="prose prose-sm max-w-none">
+                    <ReactMarkdown>{m.text}</ReactMarkdown>
+                  </div>
+                ) : (
+                  m.text
+                )}
               </div>
             </div>
           ))}
+          {loading && (
+            <div className="flex gap-3">
+              <div className="hero-gradient grid size-8 shrink-0 place-items-center rounded-xl text-primary-foreground">
+                <Bot className="size-4" />
+              </div>
+              <div className="flex items-center gap-1.5 rounded-2xl bg-muted px-4 py-3">
+                <span className="size-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s]" />
+                <span className="size-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s]" />
+                <span className="size-2 animate-bounce rounded-full bg-muted-foreground/60" />
+              </div>
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-t border-border p-4">
           <Input
+            ref={inputRef}
             placeholder="Message the assistant…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
+            disabled={loading}
+            autoFocus
           />
-          <Button onClick={send} aria-label="Send message">
+          <Button onClick={send} disabled={loading} aria-label="Send message">
             <Send className="size-4" />
           </Button>
         </div>
       </div>
+
+      <AiDisclaimer />
     </div>
   );
 }
